@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check Your Attendance</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background-color: #f4f4f4; }
+        h2 { color: #333; }
+        .container { margin: 20px auto; padding: 20px; background: white; width: 50%; border-radius: 8px; box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1); }
+        input { padding: 10px; width: 80%; margin: 10px 0; }
+        button { padding: 10px 20px; background: green; color: white; border: none; cursor: pointer; }
+        button:hover { background: darkgreen; }
+        #studentName { font-size: 18px; font-weight: bold; margin-top: 10px; color: #007bff; }
+        table { width: 100%; margin-top: 20px; border-collapse: collapse; }
+        th, td { border: 1px solid #ccc; padding: 10px; text-align: center; }
+        th { background: #eee; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Check Your Attendance</h2>
+        <form id="attendanceForm">
+            <input type="text" id="usn" placeholder="Enter Your USN Number" required><br>
+            <input type="date" id="dob" required><br>
+            <button type="button" onclick="checkAttendance()">Check Attendance</button>
+        </form>
+
+        <div id="studentName"></div>
+
+        <table id="resultTable" style="display: none;">
+            <tr>
+                <th>Subject</th>
+                <th>Percentage</th>
+            </tr>
+            <tbody id="attendanceData"></tbody>
+        </table>
+    </div>
+
+    <script>
+        function checkAttendance() {
+            const usn = document.getElementById("usn").value.trim().toUpperCase();
+            const dob = document.getElementById("dob").value;
+
+            if (usn === "" || dob === "") {
+                alert("Please enter both usn and dob!");
+                return;
+            }
+
+            const scriptUrl = "https://script.google.com/macros/s/AKfycbz5rbVjdrk3WlxZgdX4wOst5PAauTF66QimvLuoWAPdFuVz8tA-NMFHm0DU1s8hR1ES/exec";  // Replace with your actual script URL
+
+            fetch({scriptUrl}?usn={usn}dob={dob})
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                        document.getElementById("resultTable").style.display = "none";
+                        document.getElementById("studentName").innerText = "";
+                    } else {
+                        document.getElementById("studentName").innerText = "Student Name: " + data.name;
+                        const tableBody = document.getElementById("attendanceData");
+                        tableBody.innerHTML = ""; // Clear previous data
+
+                        for (const subject in data) {
+                            if (subject !== "name") {
+                                const row = <tr><td>${subject}</td><td>${data[subject]}%</td></tr>;
+                                tableBody.innerHTML += row;
+                            }
+                        }
+
+                        document.getElementById("resultTable").style.display = "block";
+                    }
+                })
+                .catch(error => console.error("Error fetching data:", error));
+        }
+    </script>
+
+</body>
+</html>
