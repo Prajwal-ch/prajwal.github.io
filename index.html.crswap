@@ -4,218 +4,232 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Attendance Form</title>
+    <title>Student Attendance Portal</title>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+
     <style>
         body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: auto;
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 700px;
+            margin: 50px auto;
+            background: white;
             padding: 20px;
-        }
-
-        label, input, select {
-            display: block;
-            margin-bottom: 10px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-        }
-
-        th, td {
-            border: 1px solid black;
-            padding: 8px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.2);
             text-align: center;
         }
 
-        button {
-            margin-top: 15px;
+        h2 {
+            color: #007bff;
+        }
+
+        label {
+            font-weight: bold;
+            margin-top: 10px;
+            display: block;
+            text-align: left;
+        }
+
+        input {
+            width: 100%;
             padding: 10px;
-            background-color: #4CAF50;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
             color: white;
             border: none;
+            border-radius: 5px;
+            font-size: 16px;
             cursor: pointer;
+            margin-top: 10px;
         }
 
         button:hover {
-            background-color: #45a049;
+            background-color: #0056b3;
         }
 
-        .loading {
+        .loader {
             display: none;
+            margin-top: 20px;
+        }
+
+        .loader img {
+            width: 50px;
+        }
+
+        #result {
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        #chart_div {
+            width: 100%;
+            height: auto;
+            min-height: 400px;
+            margin-top: 20px;
+        }
+
+        #attendanceTable {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        #attendanceTable th, #attendanceTable td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+
+        #attendanceTable th {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .error {
             color: red;
+            font-weight: bold;
         }
     </style>
-</head>
+
+<script>
+    async function fetchStudentData() {
+        var usn = document.getElementById("usn").value.trim();
+        var dob = document.getElementById("dob").value.trim();
+        var loader = document.getElementById("loader");
+        var resultDiv = document.getElementById("result");
+        var chartDiv = document.getElementById("chart_div");
+        var tableBody = document.querySelector("#attendanceTable tbody");
+        var note = document.getElementById("note");
+        var table = document.getElementById("attendanceTable");
+
+        if (usn === "" || dob === "") {
+            alert("Please enter both USN and Date of Birth.");
+            return;
+        }
+
+        loader.style.display = "block";
+        resultDiv.innerHTML = "";
+        chartDiv.innerHTML = "";
+        tableBody.innerHTML = "";
+        note.style.display = "none";
+        table.style.display = "none";
+
+        var webAppUrl = "https://script.google.com/macros/s/AKfycbw7oxMnGJzeQXVLDa9td8fDPLP0QewBIcqZhIMntBmpFc--EX6CtN6701a0kY5oJsR2/exec";
+        var urlWithParams = `${webAppUrl}?usn=${encodeURIComponent(usn)}&dob=${encodeURIComponent(dob)}`;
+
+        try {
+            const response = await fetch(urlWithParams);
+            if (!response.ok) throw new Error("Network response was not ok");
+
+            const data = await response.json();
+            loader.style.display = "none";
+
+            if (data.error) {
+                resultDiv.innerHTML = `<p class='error'>${data.error}</p>`;
+                return;
+            }
+
+            let overallPercentage = data["Overall Percentage"] || data["Overall Precentage"] || "N/A";
+            overallPercentage = (parseFloat(overallPercentage) * 100).toFixed(2) + "%"; // Convert to percentage
+
+            resultDiv.innerHTML = `
+                <h3>Student Details</h3>
+                <p><b>USN:</b> ${data["USN number"]}</p>
+                <p><b>Name:</b> ${data["Student Name"]}</p>
+                <p><b>Overall Percentage:</b> ${overallPercentage}</p>`;
+
+            let subjects = Object.keys(data).filter(subject => subject !== "USN number" && subject !== "Student Name" && subject !== "Overall Percentage");
+
+            let dataArray = [["Subject", "Attendance", { role: "style" }]];
+            let colors = ['#1E88E5', '#43A047', '#F4511E', '#8E24AA', '#FFB300', '#6D4C41', '#00ACC1', '#E53935', '#7CB342'];
+
+            subjects.forEach((subject, index) => {
+                let present = data[subject]?.["Present"] ?? 0;
+                let total = data[subject]?.["Total Classes"] ?? 0;
+
+                let percentage = total > 0 ? ((present / total) * 100).toFixed(2) : 0;
+                dataArray.push([subject, parseFloat(percentage), colors[index % colors.length]]);
+                tableBody.innerHTML += `<tr><td>${subject}</td><td>${present}</td><td>${total - present}</td><td>${total}</td></tr>`;
+            });
+
+            google.charts.load('current', { packages: ['corechart'] });
+            google.charts.setOnLoadCallback(function () {
+                var chartData = google.visualization.arrayToDataTable(dataArray);
+
+                var options = {
+                    title: "Student Attendance",
+                    bars: 'horizontal',
+                    height: 500,
+                    legend: { position: 'none' },
+                    hAxis: {
+                        title: "Attendance (%)",
+                        minValue: 0,
+                        maxValue: 100
+                    },
+                    vAxis: { title: "Subjects" },
+                    bar: { groupWidth: '65%' },
+                    annotations: {
+                        alwaysOutside: true,
+                        textStyle: { fontSize: 12, color: 'red' }
+                    }
+                };
+
+                var chart = new google.visualization.ColumnChart(chartDiv);
+                chart.draw(chartData, options);
+
+                // Show note and table when data is successfully loaded
+                note.style.display = "block";
+                table.style.display = "table";
+            });
+
+        } catch (error) {
+            loader.style.display = "none";
+            resultDiv.innerHTML = `<p class='error'>${error.message}</p>`;
+        }
+    }
+</script>
 
 <body>
+    <div class="container">
+        <h2>Student Attendance Portal</h2>
+        <label for="usn">Enter USN:</label>
+        <input type="text" id="usn" placeholder="e.g., U03NK24S0***" required>
+        <label for="dob">Enter Date of Birth (DD-MM-YYYY):</label>
+        <input type="text" id="dob" placeholder="e.g., DD-MM-YYYY" required>
 
-    <h2>Student Attendance Form</h2>
+        <button onclick="fetchStudentData()">Submit</button>
 
-    <label for="section">Select Section:</label>
-    <select id="section" required onchange="loadStudents()">
-        <option value="">Select Section</option>
-    </select>
+        <div class="loader" id="loader"><img src="https://i.gifer.com/ZZ5H.gif"></div>
 
-    <label for="subject">Select Subject:</label>
-    <select id="subject" required>
-        <option value="">Select Subject</option>
-    </select>
+        <div id="result"></div>
+        
+        <p id="note" style="display: none;">🔴 <b>75% is the minimum required criteria to appear for the exams.</b></p>
 
-    <label for="date">Date:</label>
-    <input type="date" id="date" required>
+        <div id="chart_div"></div>
 
-    <label for="time">Class Time:</label>
-    <input type="text" id="time" placeholder="E.g., 10:00 - 11:00 AM" required>
-
-    <label for="concept">Concept:</label>
-    <input type="text" id="concept" placeholder="Enter Concept Name" required>
-
-    <h3>Mark Attendance</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Roll No.</th>
-                <th>Name</th>
-                <th>Present</th>
-            </tr>
-        </thead>
-        <tbody id="studentList">
-            <!-- Students will be added dynamically -->
-        </tbody>
-    </table>
-
-    <button onclick="submitData()">Submit Attendance</button>
-    <p class="loading">Submitting Attendance, Please Wait...</p>
-
-    <script>
-        const scriptURL = "https://script.google.com/macros/s/AKfycbz_czv1vaAvnNq4zJQz4Gc0Utjb1nItvsASWd8a34HEHiHl9oTfhumE5WFnVlt0weNrug/exec"; // Replace with your actual URL
-
-        function loadSections() {
-            fetch(`${scriptURL}?action=getSections`)
-                .then(response => response.json())
-                .then(sections => {
-                    const sectionDropdown = document.getElementById("section");
-                    sectionDropdown.innerHTML = '<option value="">Select Section</option>';
-                    sections.forEach(section => {
-                        let option = document.createElement("option");
-                        option.value = section;
-                        option.textContent = section;
-                        sectionDropdown.appendChild(option);
-                    });
-                })
-                .catch(error => {
-                    console.error("Error fetching sections:", error);
-                    alert("Failed to load sections. Please try again.");
-                });
-        }
-
-        function loadSubjects() {
-            fetch(`${scriptURL}?action=getSubjects`)
-                .then(response => response.json())
-                .then(subjects => {
-                    const subjectDropdown = document.getElementById("subject");
-                    subjectDropdown.innerHTML = '<option value="">Select Subject</option>';
-                    subjects.forEach(subject => {
-                        let option = document.createElement("option");
-                        option.value = subject;
-                        option.textContent = subject;
-                        subjectDropdown.appendChild(option);
-                    });
-                })
-                .catch(error => {
-                    console.error("Error fetching subjects:", error);
-                    alert("Failed to load subjects. Please try again.");
-                });
-        }
-
-        function loadStudents() {
-            const section = document.getElementById("section").value;
-
-            if (!section) return;
-
-            fetch(`${scriptURL}?action=getStudents&section=${section}`)
-                .then(response => response.json())
-                .then(students => {
-                    const studentList = document.getElementById("studentList");
-                    studentList.innerHTML = "";
-                    students.forEach(student => {
-                        let row = document.createElement("tr");
-                        row.innerHTML = `
-                            <td>${student.roll}</td>
-                            <td>${student.name}</td>
-                            <td><input type="checkbox" class="attendance" data-roll="${student.roll}" data-name="${student.name}"></td>
-                        `;
-                        studentList.appendChild(row);
-                    });
-                })
-                .catch(error => {
-                    console.error("Error fetching students:", error);
-                    alert("Failed to load students. Please try again.");
-                });
-        }
-
-        function submitData() {
-            document.querySelector(".loading").style.display = "block";
-
-            const section = document.getElementById("section").value;
-            const subject = document.getElementById("subject").value;
-            const date = document.getElementById("date").value;
-            const time = document.getElementById("time").value;
-            const concept = document.getElementById("concept").value;
-
-            if (!section || !subject || !date || !time || !concept) {
-                alert("Please fill in all required fields.");
-                document.querySelector(".loading").style.display = "none";
-                return;
-            }
-
-            let attendance = [];
-            document.querySelectorAll(".attendance").forEach(input => {
-                attendance.push({
-                    roll: input.dataset.roll,
-                    present: input.checked ? "Present" : "Absent"
-                });
-            });
-
-            if (attendance.length === 0) {
-                alert("No students loaded. Please select a section first.");
-                document.querySelector(".loading").style.display = "none";
-                return;
-            }
-
-            let data = { section, subject, date, time, concept, attendance };
-
-            fetch(scriptURL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data)
-            })
-            .then(response => {
-                if (!response.ok) throw new Error(`Server error: ${response.status}`);
-                return response.json();
-            })
-            .then(result => {
-                if (result && result.message) {
-                    alert(result.message);
-                } else {
-                    alert("Attendance Submitted Successfully!");
-                }
-            })
-            .catch(error => {
-                console.error("Error submitting data:", error);
-                alert("Error submitting attendance. Please try again.");
-            })
-            .finally(() => {
-                document.querySelector(".loading").style.display = "none";
-            });
-        }
-
-        window.onload = () => { loadSections(); loadSubjects(); };
-    </script>
-
+        <table id="attendanceTable" style="display: none;">
+            <thead>
+                <tr><th>Subject</th><th>Present</th><th>Absent</th><th>Total Classes</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
 </body>
+
 </html>
 
